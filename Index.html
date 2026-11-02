@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en" class="dark h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TV World - Online TV Player</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0d0f12',
+                        darkCard: '#161a22',
+                        darkCardHover: '#212631',
+                        accent: '#7c3aed',
+                        accentHover: '#6d28d9',
+                        accentGlow: 'rgba(124, 58, 237, 0.35)'
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- HLS.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d0f12;
+            color: #e2e8f0;
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0d0f12;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #272d3d;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #7c3aed;
+        }
+
+        .neon-border {
+            box-shadow: 0 0 15px rgba(124, 58, 237, 0.25);
+        }
+
+        .glass-panel {
+            background: rgba(22, 26, 34, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        /* Pulse animation for live badge */
+        @keyframes pulse-red {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.92); }
+        }
+        .live-dot {
+            animation: pulse-red 1.5s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col antialiased selection:bg-purple-600 selection:text-white">
+
+    <!-- Header Section -->
+    <header class="sticky top-0 z-40 w-full glass-panel border-b border-white/10 px-4 lg:px-8 py-3 flex items-center justify-between gap-4">
+        <!-- Logo -->
+        <div class="flex items-center gap-3 cursor-pointer" onclick="resetSearch()">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-purple-500/30">
+                <i class="fa-solid font-bold fa-tv text-xl"></i>
+            </div>
+            <div>
+                <span class="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-200 to-purple-400 bg-clip-text text-transparent">TV WORLD</span>
+                <span class="hidden sm:inline-block text-[10px] uppercase font-bold tracking-widest text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded ml-1.5 border border-purple-500/20">LIVE</span>
+            </div>
+        </div>
+
+        <!-- Search Bar (Desktop) -->
+        <div class="hidden md:flex items-center flex-1 max-w-md relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-3.5 text-slate-400 text-sm"></i>
+            <input type="text" id="searchInput" data-i18n-placeholder="searchPlaceholder" placeholder="Search channels..." 
+                   class="w-full bg-slate-900/80 border border-slate-700/60 rounded-xl pl-10 pr-10 py-2 text-sm text-slate-200 placeholder-slate-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
+            <button id="clearSearch" onclick="resetSearch()" class="hidden absolute right-3 text-slate-400 hover:text-white text-xs">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <!-- Actions & Language Switcher -->
+        <div class="flex items-center gap-2 sm:gap-3">
+            <!-- Filter Favorites Only -->
+            <button id="btnFavOnly" onclick="toggleFavOnlyFilter()" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-medium px-3 py-2 rounded-xl border border-slate-700/60 transition">
+                <i class="fa-regular fa-heart text-pink-500" id="btnFavOnlyIcon"></i>
+                <span data-i18n="favorites">Favorites</span>
+            </button>
+
+            <!-- Random Channel -->
+            <button onclick="playRandomChannel()" class="hidden sm:flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-medium px-3 py-2 rounded-xl border border-slate-700/60 transition" title="Random Channel">
+                <i class="fa-solid fa-shuffle text-purple-400"></i>
+                <span data-i18n="shuffle">Shuffle</span>
+            </button>
+
+            <!-- Language Switcher -->
+            <div class="flex items-center bg-slate-900 border border-slate-700/80 rounded-xl p-1 text-xs font-semibold">
+                <button id="langEN" onclick="setLanguage('en')" class="px-2.5 py-1 rounded-lg transition-all text-white bg-purple-600">EN</button>
+                <button id="langRU" onclick="setLanguage('ru')" class="px-2.5 py-1 rounded-lg transition-all text-slate-400 hover:text-white">RU</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 flex flex-col lg:flex-row gap-6 p-4 lg:p-6 max-w-[1920px] w-full mx-auto overflow-hidden">
+        
+        <!-- Player Section (Left/Top) -->
+        <section class="lg:w-[60%] xl:w-[65%] flex flex-col gap-4">
+            <!-- Video Container -->
+            <div class="relative bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-800 aspect-video group">
+                
+                <!-- HTML5 Video -->
+                <video id="videoPlayer" class="w-full h-full object-contain" playsinline autoplay></video>
+
+                <!-- Overlay Placeholder / Loading State -->
+                <div id="playerOverlay" class="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center gap-3 z-10 transition-opacity duration-300">
+                    <div class="w-16 h-16 rounded-full bg-purple-600/20 flex items-center justify-center text-purple-400 text-2xl animate-pulse">
+                        <i class="fa-solid fa-circle-play"></i>
+                    </div>
+                    <p id="overlayText" data-i18n="selectChannel" class="text-sm font-medium text-slate-300">Select a channel to start watching</p>
+                </div>
+
+                <!-- Live Tag Over Video -->
+                <div class="absolute top-4 left-4 z-20 flex items-center gap-2 bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
+                    <span class="w-2.5 h-2.5 rounded-full bg-red-500 live-dot"></span>
+                    <span data-i18n="live" class="text-xs font-bold text-white uppercase tracking-wider">LIVE</span>
+                </div>
+
+                <!-- Video Controls Bar -->
+                <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        <button id="btnPlayPause" class="text-white hover:text-purple-400 text-xl transition">
+                            <i class="fa-solid fa-pause"></i>
+                        </button>
+                        
+                        <!-- Volume Controls -->
+                        <div class="flex items-center gap-2 group/vol">
+                            <button id="btnMute" class="text-slate-300 hover:text-white transition">
+                                <i class="fa-solid fa-volume-high"></i>
+                            </button>
+                            <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="1" 
+                                   class="w-16 sm:w-20 accent-purple-500 bg-slate-700 h-1 rounded-lg cursor-pointer">
+                        </div>
+                    </div>
+
+                    <!-- Current Playing Title -->
+                    <div class="flex-1 text-center truncate px-2">
+                        <h2 id="playerChannelTitle" data-i18n="loading" class="text-sm sm:text-base font-semibold text-white truncate">Loading...</h2>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <button id="btnFavCurrent" onclick="toggleFavoriteCurrent()" class="text-slate-400 hover:text-pink-500 text-lg transition" title="Add to Favorites">
+                            <i class="fa-regular fa-heart"></i>
+                        </button>
+                        <button id="btnFullscreen" class="text-slate-300 hover:text-white text-lg transition" title="Fullscreen Mode">
+                            <i class="fa-solid fa-expand"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EPG / Info Bar below player -->
+            <div class="bg-darkCard rounded-2xl p-4 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div class="flex items-center gap-4 w-full sm:w-auto">
+                    <div id="playerChannelLogo" class="w-12 h-12 rounded-xl bg-slate-900 border border-slate-700/50 flex items-center justify-center overflow-hidden shrink-0">
+                        <i class="fa-solid fa-tv text-slate-600 text-lg"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2">
+                            <span id="playerBadge" data-i18n="liveTv" class="text-[10px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded border border-purple-500/20">LIVE TV</span>
+                            <span id="playerResolution" class="text-[10px] font-semibold text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">HD 1080p</span>
+                        </div>
+                        <h3 id="epgTitle" data-i18n="selectChannelNotice" class="text-slate-100 font-semibold text-base truncate mt-0.5">Select a channel from the list</h3>
+                        <p id="epgTime" data-i18n="epgDefault" class="text-slate-400 text-xs">Current program schedule will appear here</p>
+                    </div>
+                </div>
+
+                <!-- EPG Progress bar mock -->
+                <div class="w-full sm:w-48 flex flex-col gap-1.5 shrink-0">
+                    <div class="flex justify-between text-[11px] text-slate-400">
+                        <span data-i18n="streamProgress">Broadcast Progress</span>
+                        <span id="epgPercent">65%</span>
+                    </div>
+                    <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                        <div id="epgProgressBar" class="bg-gradient-to-r from-purple-500 to-indigo-500 h-full w-[65%] rounded-full transition-all duration-500"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Channels & Navigation Section (Right/Bottom) -->
+        <section class="lg:w-[40%] xl:w-[35%] flex flex-col gap-4 flex-1 min-h-[450px] lg:min-h-0 overflow-hidden">
+            
+            <!-- Mobile Search Bar -->
+            <div class="md:hidden relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-sm"></i>
+                <input type="text" id="mobileSearchInput" data-i18n-placeholder="searchPlaceholder" placeholder="Search channels..." 
+                       class="w-full bg-slate-900 border border-slate-700/60 rounded-xl pl-10 pr-4 py-2 text-sm text-slate-200 placeholder-slate-400 focus:outline-none focus:border-purple-500">
+            </div>
+
+            <!-- Channel Stats / Counter -->
+            <div class="flex items-center justify-between text-xs text-slate-400 px-1 shrink-0">
+                <span><span data-i18n="channelsFound">Channels available:</span> <strong id="channelCount" class="text-slate-200">0</strong></span>
+                <span id="currentFilterStatus" data-i18n="allChannels" class="font-medium text-purple-400">All Channels</span>
+            </div>
+
+            <!-- Channels Grid Container -->
+            <div id="channelsContainer" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 gap-3 overflow-y-auto pr-1 flex-1 pb-6">
+                <!-- Channel Cards injected by JS -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 bg-slate-900 border border-purple-500/40 text-slate-100 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 transition-all duration-300 transform translate-y-20 opacity-0 pointer-events-none">
+        <i id="toastIcon" class="fa-solid fa-circle-info text-purple-400"></i>
+        <span id="toastMessage" class="text-sm font-medium">Notification</span>
+    </div>
+
+    <script>
+        /* Internationalization Dictionaries */
+        const i18n = {
+            en: {
+                searchPlaceholder: "Search channels...",
+                favorites: "Favorites",
+                shuffle: "Shuffle",
+                selectChannel: "Select a channel to start watching",
+                live: "LIVE",
+                loading: "Loading...",
+                liveTv: "LIVE TV",
+                selectChannelNotice: "Select a channel from the list",
+                epgDefault: "Current program schedule will appear here",
+                streamProgress: "Broadcast Progress",
+                channelsFound: "Channels available:",
+                allChannels: "All Channels",
+                onlyFavorites: "Favorites Only",
+                noChannels: "No channels found",
+                noChannelsSub: "Try changing your search query or clear filters",
+                addedFav: "Channel added to Favorites",
+                removedFav: "Channel removed from Favorites",
+                switchedTo: "Switched to:",
+                connecting: "Connecting to stream"
+            },
+            ru: {
+                searchPlaceholder: "Поиск каналов...",
+                favorites: "Избранное",
+                shuffle: "Микс",
+                selectChannel: "Выберите канал для просмотра",
+                live: "ЭФИР",
+                loading: "Загрузка...",
+                liveTv: "ТВ ЭФИР",
+                selectChannelNotice: "Выберите канал из списка",
+                epgDefault: "Текущая программа передач появится здесь",
+                streamProgress: "Прогресс эфира",
+                channelsFound: "Доступно каналов:",
+                allChannels: "Все каналы",
+                onlyFavorites: "Только избранные",
+                noChannels: "Каналы не найдены",
+                noChannelsSub: "Попробуйте изменить поисковый запрос или сбросить фильтры",
+                addedFav: "Канал добавлен в Избранное",
+                removedFav: "Канал удален из Избранного",
+                switchedTo: "Переключено на:",
+                connecting: "Подключение к потоку"
+            }
+        };
+
+        /* Default Channels Data */
+        const CHANNELS_DATA = [
+            {
+                id: 'ch-1',
+                name: '1 ARKHI',
+                logo: '	http://hls.gd/images/chIcons/1593.png',
+                url: 'https://tv.cdn.xsg.ge/gpb-1tv/index.m3u8',
+                epg: {
+                    en: "1 ARKHI",
+                    ru: "1 ARKHI"
+                }
+            },
+            {
+                id: 'ch-2',
+                name: '1 ARKHI SPORT ',
+                logo: 'http://hls.gd/images/chIcons/2822.png',
+                url: 'https://tv.cdn.xsg.ge/gpb-2tv/index.m3u8',
+                epg: {
+                    en: "1 ARKHI SPORT",
+                    ru: "1 ARKHI SPORT"
+                }
+            },
+            {
+                id: 'ch-3',
+                name: 'SETANTA 1',
+                logo: 'http://hls.gd/images/chIcons/1199.png',
+                url: 'https://cdn-tbs3.setantasports.com/setanta_tv_1_no/tracks-v1a1/mono.m3u8',
+                epg: {
+                    en: "SETANTA 1",
+                    ru: "SETANTA 1"
+                }
+            },
+            {
+                id: 'ch-4',
+                name: 'SETANTA 2',
+                logo: '	http://hls.gd/images/chIcons/1206.png',
+                url: 'https://cdn-tbs3.setantasports.com/setanta_tv_2_no/tracks-v1a1/mono.m3u8',
+                epg: {
+                    en: "SETANTA 2",
+                    ru: "SETANTA 2"
+                }
+            },
+            {
+                id: 'ch-5',
+                name: 'SETANTA 3',
+                logo: '	http://hls.gd/images/chIcons/2060.png',
+                url: 'https://cdn-tbs3.setantasports.com/setanta_tv_3_no/tracks-v1a1/mono.m3u8',
+                epg: {
+                    en: "SETANTA 3",
+                    ru: "SETANTA 3"
+                }
+            },
+            {
+                id: 'ch-6',
+                name: 'IMEDI',
+                logo: '	http://hls.gd/images/chIcons/1202.png',
+                url: 'https://tv.cdn.xsg.ge/imedihd/index.m3u8',
+                epg: {
+                    en: "IMEDI",
+                    ru: "IMEDI"
+                }
+            },
+            {
+                id: 'ch-7',
+                name: 'jer araferia',
+                logo: 'araferi',
+                url: 'araferi',
+                epg: {
+                    en: "Movie: 'Tears of Steel' (Sci-Fi Classic)",
+                    ru: "Фильм: 'Слезы Стали' (Фантастика)"
+                }
+            },
+            {
+                id: 'ch-8',
+                name: 'jer araferia',
+                logo: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=150&auto=format&fit=crop&q=80',
+                url: 'araferi',
+                epg: {
+                    en: "Animated series for the whole family",
+                    ru: "Мультсериалы и анимация для всей семьи"
+                }
+            }
+        ];
+
+        /* State Management */
+        let currentLang = localStorage.getItem('tv_lang') || 'en';
+        let currentChannel = null;
+        let searchQuery = '';
+        let showFavoritesOnly = false;
+        let favorites = JSON.parse(localStorage.getItem('tv_favs') || '[]');
+        let hlsPlayer = null;
+
+        // DOM Elements
+        const videoEl = document.getElementById('videoPlayer');
+        const overlayEl = document.getElementById('playerOverlay');
+        const overlayText = document.getElementById('overlayText');
+        const channelsContainer = document.getElementById('channelsContainer');
+        const searchInput = document.getElementById('searchInput');
+        const mobileSearchInput = document.getElementById('mobileSearchInput');
+        const channelCountEl = document.getElementById('channelCount');
+
+        /* Initialize App */
+        window.addEventListener('DOMContentLoaded', () => {
+            setLanguage(currentLang, false);
+            renderChannels();
+
+            if (CHANNELS_DATA.length > 0) {
+                playChannel(CHANNELS_DATA[0]);
+            }
+
+            setupEventListeners();
+        });
+
+        /* Language Switcher Logic */
+        function setLanguage(lang, triggerRender = true) {
+            currentLang = lang;
+            localStorage.setItem('tv_lang', lang);
+            document.documentElement.lang = lang;
+
+            // Toggle language buttons style
+            document.getElementById('langEN').className = `px-2.5 py-1 rounded-lg transition-all ${lang === 'en' ? 'bg-purple-600 text-white font-bold' : 'text-slate-400 hover:text-white'}`;
+            document.getElementById('langRU').className = `px-2.5 py-1 rounded-lg transition-all ${lang === 'ru' ? 'bg-purple-600 text-white font-bold' : 'text-slate-400 hover:text-white'}`;
+
+            // Translate static DOM strings
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (i18n[lang][key]) {
+                    el.textContent = i18n[lang][key];
+                }
+            });
+
+            // Translate placeholders
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+                const key = el.getAttribute('data-i18n-placeholder');
+                if (i18n[lang][key]) {
+                    el.placeholder = i18n[lang][key];
+                }
+            });
+
+            // Update status text
+            document.getElementById('currentFilterStatus').textContent = showFavoritesOnly ? i18n[lang].onlyFavorites : i18n[lang].allChannels;
+
+            if (triggerRender) {
+                renderChannels();
+                if (currentChannel) {
+                    document.getElementById('epgTitle').textContent = currentChannel.epg[currentLang] || currentChannel.name;
+                }
+            }
+        }
+
+        /* Render Channel Cards Grid (No Categories) */
+        function renderChannels() {
+            let filtered = CHANNELS_DATA.filter(c => {
+                const matchesFav = showFavoritesOnly ? favorites.includes(c.id) : true;
+                const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                      (c.epg[currentLang] && c.epg[currentLang].toLowerCase().includes(searchQuery.toLowerCase()));
+                return matchesFav && matchesSearch;
+            });
+
+            channelCountEl.textContent = filtered.length;
+
+            if (filtered.length === 0) {
+                channelsContainer.innerHTML = `
+                    <div class="col-span-full py-12 flex flex-col items-center justify-center text-center text-slate-500">
+                        <i class="fa-solid fa-tv-slash text-4xl mb-3 text-slate-700"></i>
+                        <p class="text-sm font-medium text-slate-300">${i18n[currentLang].noChannels}</p>
+                        <p class="text-xs mt-1 text-slate-500">${i18n[currentLang].noChannelsSub}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            channelsContainer.innerHTML = filtered.map(ch => {
+                const isPlaying = currentChannel && currentChannel.id === ch.id;
+                const isFav = favorites.includes(ch.id);
+
+                return `
+                    <div onclick="playChannelById('${ch.id}')" 
+                         class="group relative bg-darkCard hover:bg-darkCardHover border ${isPlaying ? 'border-purple-500 neon-border' : 'border-slate-800'} rounded-2xl p-3 flex items-center gap-3 cursor-pointer transition-all hover:scale-[1.01] active:scale-95">
+                        
+                        <!-- Logo Frame -->
+                        <div class="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden shrink-0 group-hover:border-purple-500/50 transition">
+                            ${ch.logo ? 
+                                `<img src="${ch.logo}" alt="${ch.name}" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='https://placehold.co/100x100/1e293b/94a3b8?text=TV'">` : 
+                                `<i class="fa-solid fa-tv text-slate-600 group-hover:text-purple-400"></i>`
+                            }
+                        </div>
+
+                        <!-- Details -->
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] font-semibold text-purple-400 uppercase tracking-wide truncate">IPTV</span>
+                                ${isPlaying ? `<span class="text-[10px] font-bold text-red-500 flex items-center gap-1"><i class="fa-solid fa-play text-[8px]"></i> ${i18n[currentLang].live}</span>` : ''}
+                            </div>
+                            <h4 class="text-sm font-semibold text-slate-100 truncate mt-0.5 group-hover:text-purple-300 transition">${ch.name}</h4>
+                            <p class="text-[11px] text-slate-400 truncate mt-0.5">${ch.epg[currentLang] || ch.name}</p>
+                        </div>
+
+                        <!-- Favorite Button -->
+                        <button onclick="event.stopPropagation(); toggleFavorite('${ch.id}')" 
+                                class="p-2 text-slate-500 hover:text-pink-500 transition">
+                            <i class="${isFav ? 'fa-solid text-pink-500' : 'fa-regular'} fa-heart"></i>
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        /* Video Playback Logic with HLS.js */
+        function playChannel(channel) {
+            if (!channel) return;
+            currentChannel = channel;
+
+            // Update UI Details
+            document.getElementById('playerChannelTitle').textContent = channel.name;
+            document.getElementById('epgTitle').textContent = channel.epg[currentLang] || channel.name;
+            
+            const randomTimeOffset = Math.floor(Math.random() * 40) + 10;
+            document.getElementById('epgTime').textContent = `18:${randomTimeOffset} - 19:30 • Live Stream`;
+            
+            const randomPercent = Math.floor(Math.random() * 60) + 20;
+            document.getElementById('epgPercent').textContent = `${randomPercent}%`;
+            document.getElementById('epgProgressBar').style.width = `${randomPercent}%`;
+
+            // Channel Logo
+            const logoContainer = document.getElementById('playerChannelLogo');
+            if (channel.logo) {
+                logoContainer.innerHTML = `<img src="${channel.logo}" class="w-full h-full object-cover">`;
+            } else {
+                logoContainer.innerHTML = `<i class="fa-solid fa-tv text-slate-600 text-lg"></i>`;
+            }
+
+            // Update Fav button in player
+            const favBtn = document.getElementById('btnFavCurrent');
+            if (favorites.includes(channel.id)) {
+                favBtn.innerHTML = `<i class="fa-solid fa-heart text-pink-500"></i>`;
+            } else {
+                favBtn.innerHTML = `<i class="fa-regular fa-heart"></i>`;
+            }
+
+            // Show Loading Overlay
+            overlayEl.style.opacity = '1';
+            overlayText.textContent = `${i18n[currentLang].connecting} ${channel.name}...`;
+
+            // Handle Stream URL
+            const videoUrl = channel.url;
+
+            if (Hls.isSupported()) {
+                if (hlsPlayer) {
+                    hlsPlayer.destroy();
+                }
+                hlsPlayer = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true
+                });
+                hlsPlayer.loadSource(videoUrl);
+                hlsPlayer.attachMedia(videoEl);
+                hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
+                    videoEl.play().catch(() => {});
+                    overlayEl.style.opacity = '0';
+                });
+                hlsPlayer.on(Hls.Events.ERROR, (event, data) => {
+                    if (data.fatal) {
+                        overlayText.textContent = "Error loading stream";
+                    }
+                });
+            } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+                // Safari Fallback
+                videoEl.src = videoUrl;
+                videoEl.addEventListener('loadedmetadata', () => {
+                    videoEl.play();
+                    overlayEl.style.opacity = '0';
+                });
+            } else {
+                showToast('HLS playback not supported in this browser', 'error');
+            }
+
+            renderChannels();
+        }
+
+        function playChannelById(id) {
+            const ch = CHANNELS_DATA.find(c => c.id === id);
+            if (ch) playChannel(ch);
+        }
+
+        function playRandomChannel() {
+            if (CHANNELS_DATA.length === 0) return;
+            const randomIndex = Math.floor(Math.random() * CHANNELS_DATA.length);
+            playChannel(CHANNELS_DATA[randomIndex]);
+            showToast(`${i18n[currentLang].switchedTo} ${CHANNELS_DATA[randomIndex].name}`);
+        }
+
+        function toggleFavOnlyFilter() {
+            showFavoritesOnly = !showFavoritesOnly;
+            const btnIcon = document.getElementById('btnFavOnlyIcon');
+            const btn = document.getElementById('btnFavOnly');
+            
+            if (showFavoritesOnly) {
+                btnIcon.className = 'fa-solid fa-heart text-pink-500';
+                btn.classList.add('border-pink-500/50', 'bg-pink-500/10');
+            } else {
+                btnIcon.className = 'fa-regular fa-heart text-pink-500';
+                btn.classList.remove('border-pink-500/50', 'bg-pink-500/10');
+            }
+
+            document.getElementById('currentFilterStatus').textContent = showFavoritesOnly ? i18n[currentLang].onlyFavorites : i18n[currentLang].allChannels;
+            renderChannels();
+        }
+
+        function resetSearch() {
+            searchQuery = '';
+            searchInput.value = '';
+            mobileSearchInput.value = '';
+            showFavoritesOnly = false;
+            
+            const btnIcon = document.getElementById('btnFavOnlyIcon');
+            const btn = document.getElementById('btnFavOnly');
+            btnIcon.className = 'fa-regular fa-heart text-pink-500';
+            btn.classList.remove('border-pink-500/50', 'bg-pink-500/10');
+
+            document.getElementById('currentFilterStatus').textContent = i18n[currentLang].allChannels;
+            renderChannels();
+        }
+
+        /* Favorites Toggle */
+        function toggleFavorite(id) {
+            if (favorites.includes(id)) {
+                favorites = favorites.filter(fId => fId !== id);
+                showToast(i18n[currentLang].removedFav);
+            } else {
+                favorites.push(id);
+                showToast(i18n[currentLang].addedFav);
+            }
+            localStorage.setItem('tv_favs', JSON.stringify(favorites));
+            
+            if (currentChannel && currentChannel.id === id) {
+                const favBtn = document.getElementById('btnFavCurrent');
+                favBtn.innerHTML = favorites.includes(id) ? `<i class="fa-solid fa-heart text-pink-500"></i>` : `<i class="fa-regular fa-heart"></i>`;
+            }
+            
+            renderChannels();
+        }
+
+        function toggleFavoriteCurrent() {
+            if (currentChannel) {
+                toggleFavorite(currentChannel.id);
+            }
+        }
+
+        /* Notification Toast Helper */
+        function showToast(msg, type = 'info') {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMessage');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastMsg.textContent = msg;
+            toastIcon.className = type === 'error' ? 'fa-solid fa-circle-exclamation text-red-400' : 'fa-solid fa-circle-info text-purple-400';
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        /* Event Listeners Setup */
+        function setupEventListeners() {
+            // Player Play/Pause
+            const btnPlayPause = document.getElementById('btnPlayPause');
+            btnPlayPause.addEventListener('click', () => {
+                if (videoEl.paused) {
+                    videoEl.play();
+                    btnPlayPause.innerHTML = `<i class="fa-solid fa-pause"></i>`;
+                } else {
+                    videoEl.pause();
+                    btnPlayPause.innerHTML = `<i class="fa-solid fa-play"></i>`;
+                }
+            });
+
+            // Volume Control
+            const volumeSlider = document.getElementById('volumeSlider');
+            const btnMute = document.getElementById('btnMute');
+
+            volumeSlider.addEventListener('input', (e) => {
+                videoEl.volume = e.target.value;
+                videoEl.muted = e.target.value == 0;
+                btnMute.innerHTML = videoEl.muted ? `<i class="fa-solid fa-volume-xmark text-red-400"></i>` : `<i class="fa-solid fa-volume-high"></i>`;
+            });
+
+            btnMute.addEventListener('click', () => {
+                videoEl.muted = !videoEl.muted;
+                btnMute.innerHTML = videoEl.muted ? `<i class="fa-solid fa-volume-xmark text-red-400"></i>` : `<i class="fa-solid fa-volume-high"></i>`;
+            });
+
+            // Fullscreen
+            document.getElementById('btnFullscreen').addEventListener('click', () => {
+                if (!document.fullscreenElement) {
+                    videoEl.requestFullscreen().catch(() => {
+                        showToast('Fullscreen mode not available', 'error');
+                    });
+                } else {
+                    document.exitFullscreen();
+                }
+            });
+
+            // Search input handlers
+            const handleSearch = (e) => {
+                searchQuery = e.target.value;
+                document.getElementById('clearSearch').classList.toggle('hidden', searchQuery.length === 0);
+                renderChannels();
+            };
+
+            searchInput.addEventListener('input', handleSearch);
+            mobileSearchInput.addEventListener('input', handleSearch);
+        }
+    </script>
+</body>
+</html>
